@@ -45,7 +45,7 @@ func rundb(database *sql.DB) {
 	}
 	fmt.Println(result.LastInsertId())
 	result, err2 = database.Exec(
-		"INSERT INTO employee (employeeID, name, age, person_id) VALUES (22, 'Alex Lambson', 21, 1)", nil,
+		"INSERT INTO employee (employeeID, name, age, person_id) VALUES (?, ?, ?, ?)", nil,
 		"Swati Soni",
 		24, 1)
 
