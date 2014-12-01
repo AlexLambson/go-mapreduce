@@ -9,49 +9,64 @@ import (
 	//"time"
 	//"strings"
 	//"os"
+	"strconv"
 )
 
-type Person struct {
-	key       sql.NullInt64
-	firstName sql.NullString
-	lastName  sql.NullString
-	address   sql.NullString
-	city      sql.NullString
+//This will be our struct to hold the data supplied by russ
+type Pair struct {
+	Key   string
+	Value string
 }
 
-type employee struct {
-	empID       sql.NullInt64
-	empName     sql.NullString
-	empAge      sql.NullInt64
-	empPersonId sql.NullInt64
+//This can be used to print data to the sql format from any struct
+//implement a Print() method for a struct, then it can be converted to SQL
+type SQLCommand interface {
+	InsertSQL(*sql.DB) error
+	QuerySQLFromStructKey(*sql.DB) string
 }
 
-func rundb(database *sql.DB) {
+func QueryID(ID int, database *sql.DB) string {
+	SID := strconv.Itoa(ID)
+	return SID
+}
+func QueryKey(Key string, database *sql.DB) string {
+	return "not implemented"
+}
+func (elt Pair) QuerySQLFromStructKey(database *sql.DB) (ReturnValue string) {
+	rows, err := database.Query("SELECT value FROM Pairs WHERE key=?", elt.Key)
+	if err != nil {
+		return "Could not Query Database in Pair.QuerySQLFromStruct()"
+	}
+	for rows.Next() {
+		var value string
+		if err2 := rows.Scan(&value); err2 != nil {
+			return fmt.Sprintf("Could not read rows in Pair.QuerySQLFromStructKey: %v\n", err2)
+		}
+		value = fmt.Sprintf("	Key:  %s\n	Value:  %s\n", elt.Key, value)
+		//strings.Join(ReturnValue, value)
+		ReturnValue = fmt.Sprintf("%s\n%s", ReturnValue, value)
+	}
+	return ReturnValue
+}
+func (elt Pair) InsertSQL(database *sql.DB) error {
+	_, err := database.Exec("INSERT INTO Pairs (ID, key, value) VALUES (?, ?, ?)", nil, elt.Key, elt.Value)
+	return err
+}
+
+//in mapreduce, we want to not do db.Begin() just do db.exec()
+func DatabaseMutate(database *sql.DB, command SQLCommand) {
+	//open a session with the database
 	tx, err := database.Begin()
 	if err != nil {
 		log.Fatalln("Could not begin connection in rundb\n", err)
 	}
-	result, err2 := database.Exec(
-		"CREATE TABLE IF NOT EXISTS Persons ( id integer PRIMARY KEY, LastName varchar(255) NOT NULL, FirstName varchar(255), Address varchar(255), City varchar(255), CONSTRAINT uc_PersonID UNIQUE (id,LastName))")
+
+	err2 := command.InsertSQL(database)
 
 	if err2 != nil {
 		log.Fatal(err2)
 	}
-	result, err2 = database.Exec(
-		"create table IF NOT EXISTS employee (employeeID integer PRIMARY KEY,name varchar(255) NOT null,age int, person_id int, FOREIGN KEY (person_id) REFERENCES persons(id), CONSTRAINT uc_empID UNIQUE (employeeID, person_id, name))")
-
-	if err2 != nil {
-		log.Fatal(err2)
-	}
-	fmt.Println(result.LastInsertId())
-	result, err2 = database.Exec(
-		"INSERT INTO employee (employeeID, name, age, person_id) VALUES (?, ?, ?, ?)", nil,
-		"Swati Soni",
-		24, 1)
-
-	if err2 != nil {
-		log.Fatal(err2)
-	}
+	//write the changes to the database.
 	tx.Commit()
 }
 func main() {
@@ -67,5 +82,10 @@ func main() {
 	if err2 := database.Ping(); err2 != nil {
 		fmt.Println("Failed to open connection. Database may not exist")
 	}
-	rundb(database)
+	var alex Pair
+	alex.Key = "Alex's Class"
+	alex.Value = "3005"
+	//(database)
+	DatabaseMutate(database, alex)
+	fmt.Println(alex.QuerySQLFromStructKey(database))
 }
