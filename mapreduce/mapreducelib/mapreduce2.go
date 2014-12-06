@@ -88,14 +88,22 @@ type Master struct {
 }
 
 type Work struct {
-	WorkerID     int
-	Type         int
-	Filename     string
-	Offset       int
-	Size         int
-	M            int
-	R            int
-	Table        string
+	//id of worker who is working on it
+	WorkerID int
+	//type of work, see consts
+	Type int
+	//file name of sqlite file
+	Filename string
+	//starting row
+	Offset int
+	//number of rows to work
+	Size int
+	//number of mappers
+	NumMappers  int
+	NumReducers int
+	//table name to work on
+	Table string
+	//evrybody in the quorum
 	MapAddresses []string
 }
 
@@ -896,7 +904,7 @@ func StartWorker(mapFunc MapFunc, reduceFunc ReduceFunc, master string, verb boo
 			logf("Cleanup Command Given - Removing Temp Files.")
 			err = os.RemoveAll("/tmp/mapfolder")
 			if err != nil {
-				fmt.Printf("%q",err)
+				fmt.Printf("%q", err)
 			}
 			return nil
 		}

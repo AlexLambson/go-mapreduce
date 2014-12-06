@@ -12,16 +12,33 @@ import (
 	"strconv"
 )
 
+//these are used in task type
+const (
+	WORK_DONE   = "1"
+	WORK_MAP    = "2"
+	WORK_REDUCE = "3"
+	WAIT        = "4"
+)
+
 type Task struct {
+	WorkerID     int
+	Type         int
+	Filename     string
+	Offset       int
+	Size         int
+	M            int
+	R            int
+	Table        string
+	MapAddresses []string
 }
-type Node struct {
+type Server struct {
 	NumMappers  int
 	NumReducers int
 	Tasks       []Task
 }
 
-func (n *Node) create() error {
-	rpc.Register(n)
+func (elt *Server) create() error {
+	rpc.Register(elt)
 	rpc.HandleHTTP()
 	listening := false
 	nextAddress := 0
