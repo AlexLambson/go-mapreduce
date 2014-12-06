@@ -190,7 +190,7 @@ func (self *Master) Notify(request Request, response *Response) error {
 }
 
 func Merge(R int, reduceFunc ReduceFunc, output string, verb bool) error {
-	os.Mkdir("/tmp/mapfolder", 1777)
+	os.Mkdir("/tmp/tjones", 1777)
 	// Combine all the rows into a single input file
 	sqls := []string{
 		"create table if not exists data (key text not null, value text not null)",
@@ -224,7 +224,7 @@ func Merge(R int, reduceFunc ReduceFunc, output string, verb bool) error {
 		}
 	}
 
-	agg_db, err := sql.Open("sqlite3", "/tmp/mapfolder/aggregate.sql")
+	agg_db, err := sql.Open("sqlite3", "/tmp/tjones/aggregate.sql")
 	for _, sql := range sqls {
 		_, err = agg_db.Exec(sql)
 		if err != nil {
@@ -233,7 +233,7 @@ func Merge(R int, reduceFunc ReduceFunc, output string, verb bool) error {
 	}
 	agg_db.Close()
 
-	agg_db, err = sql.Open("sqlite3", ("/tmp/mapfolder/aggregate.sql"))
+	agg_db, err = sql.Open("sqlite3", ("/tmp/tjones/aggregate.sql"))
 	defer agg_db.Close()
 	rows, err := agg_db.Query("select key, value from data order by key asc;")
 	if err != nil {
@@ -324,85 +324,85 @@ func Merge(R int, reduceFunc ReduceFunc, output string, verb bool) error {
 	return nil
 }
 
-// func call(address, method string, request Request, response *Response) error {
-// 	client, err := rpc.DialHTTP("tcp", address)
-// 	if err != nil {
-// 		failure("rpc.Dial")
-// 		log.Println(err)
-// 		return err
-// 	}
-// 	defer client.Close()
+func call(address, method string, request Request, response *Response) error {
+	client, err := rpc.DialHTTP("tcp", address)
+	if err != nil {
+		failure("rpc.Dial")
+		log.Println(err)
+		return err
+	}
+	defer client.Close()
 
-// 	err = client.Call("Master."+method, request, response)
-// 	if err != nil {
-// 		failure("rpc.Call")
-// 		log.Println(err)
-// 		return err
-// 	}
+	err = client.Call("Master."+method, request, response)
+	if err != nil {
+		failure("rpc.Call")
+		log.Println(err)
+		return err
+	}
 
-// 	return nil
-// }
+	return nil
+}
 
-// func failure(f string) {
-// 	log.Println("Call", f, "has failed.")
-// }
+func failure(f string) {
+	log.Println("Call", f, "has failed.")
+}
 
-// func readLine(readline chan string) {
-// 	// Get command
-// 	reader := bufio.NewReader(os.Stdin)
-// 	line, err := reader.ReadString('\n')
-// 	if err != nil {
-// 		log.Fatal("READLINE ERROR:", err)
-// 	}
-// 	readline <- line
-// }
+func readLine(readline chan string) {
+	// Get command
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		log.Fatal("READLINE ERROR:", err)
+	}
+	readline <- line
+}
 
-// func logf(format string, args ...interface{}) {
-// 	if true {
-// 		log.Printf(format, args...)
-// 	}
-// }
+func logf(format string, args ...interface{}) {
+	if true {
+		log.Printf(format, args...)
+	}
+}
 
-// func hash(elt string) *big.Int {
-// 	hasher := sha1.New()
-// 	hasher.Write([]byte(elt))
-// 	return new(big.Int).SetBytes(hasher.Sum(nil))
-// }
+func hash(elt string) *big.Int {
+	hasher := sha1.New()
+	hasher.Write([]byte(elt))
+	return new(big.Int).SetBytes(hasher.Sum(nil))
+}
 
-// func GetLocalAddress() string {
-// 	var localaddress string
+func GetLocalAddress() string {
+	var localaddress string
 
-// 	ifaces, err := net.Interfaces()
-// 	if err != nil {
-// 		panic("init: failed to find network interfaces")
-// 	}
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		panic("init: failed to find network interfaces")
+	}
 
-// 	// find the first non-loopback interface with an IP address
-// 	for _, elt := range ifaces {
-// 		if elt.Flags&net.FlagLoopback == 0 && elt.Flags&net.FlagUp != 0 {
-// 			addrs, err := elt.Addrs()
-// 			if err != nil {
-// 				panic("init: failed to get addresses for network interfaces")
-// 			}
-// 			for _, a := range addrs {
-// 				ip, _, err := net.ParseCIDR(a.String())
-// 				if err != nil {
-// 					panic("init: failed to parse address for network interface")
-// 				}
-// 				ip4 := ip.To4()
-// 				if ip4 != nil {
-// 					localaddress = ip.String()
-// 					break
-// 				}
-// 			}
-// 		}
-// 	}
-// 	if localaddress == "" {
-// 		panic("init: failed to find non-loopback interface with valid address on this node")
-// 	}
+	// find the first non-loopback interface with an IP address
+	for _, elt := range ifaces {
+		if elt.Flags&net.FlagLoopback == 0 && elt.Flags&net.FlagUp != 0 {
+			addrs, err := elt.Addrs()
+			if err != nil {
+				panic("init: failed to get addresses for network interfaces")
+			}
+			for _, a := range addrs {
+				ip, _, err := net.ParseCIDR(a.String())
+				if err != nil {
+					panic("init: failed to parse address for network interface")
+				}
+				ip4 := ip.To4()
+				if ip4 != nil {
+					localaddress = ip.String()
+					break
+				}
+			}
+		}
+	}
+	if localaddress == "" {
+		panic("init: failed to find non-loopback interface with valid address on this node")
+	}
 
-// 	return localaddress
-// }
+	return localaddress
+}
 
 /*
  * // MASTER - counts the data
@@ -497,7 +497,7 @@ func StartMaster(config *Config, reduceFunc ReduceFunc, verb bool) error {
  * select distinct key .....
  */
 func StartWorker(mapFunc MapFunc, reduceFunc ReduceFunc, master string, verb bool) error {
-	os.Mkdir("/tmp/mapfolder", 1777)
+	os.Mkdir("/tmp/tjones", 1777)
 	tasks_run := 0
 	call_fail := 0
 	for {
@@ -586,7 +586,7 @@ func StartWorker(mapFunc MapFunc, reduceFunc ReduceFunc, master string, verb boo
 				reducer := big.NewInt(0)
 				reducer.Mod(hash(key), big.NewInt(int64(work.R)))
 
-				db_tmp, err := sql.Open("sqlite3", fmt.Sprintf("/tmp/mapfolder/map_%d_out_%d.sql", work.WorkerID, reducer.Int64()))
+				db_tmp, err := sql.Open("sqlite3", fmt.Sprintf("/tmp/tjones/map_%d_out_%d.sql", work.WorkerID, reducer.Int64()))
 				if err != nil {
 					log.Println(err)
 					failure(fmt.Sprintf("sql.Open - /tmp/map_output/%d/map_out_%d.sql", work.WorkerID, reducer.Int64()))
@@ -649,7 +649,7 @@ func StartWorker(mapFunc MapFunc, reduceFunc ReduceFunc, master string, verb boo
 					logf("Starting file server for mapout files")
 				}
 
-				fileServer := http.FileServer(http.Dir("/tmp/mapfolder/"))
+				fileServer := http.FileServer(http.Dir("/tmp/tjones/"))
 				log.Println("Map Job File Server Listening on " + address)
 				log.Fatal(http.ListenAndServe(address, fileServer))
 			}(myAddress)
@@ -686,7 +686,7 @@ func StartWorker(mapFunc MapFunc, reduceFunc ReduceFunc, master string, verb boo
 					log.Fatal(err)
 				}
 
-				filename := fmt.Sprintf("/tmp/mapfolder/map_out_%d_mapper_%d.sql", work.WorkerID, i)
+				filename := fmt.Sprintf("/tmp/tjones/map_out_%d_mapper_%d.sql", work.WorkerID, i)
 				filenames = append(filenames, filename)
 
 				err = ioutil.WriteFile(filename, file, 0777)
@@ -734,7 +734,7 @@ func StartWorker(mapFunc MapFunc, reduceFunc ReduceFunc, master string, verb boo
 			if verb {
 				logf("Aggregating Mapper Files Complete, Preping Reduce DB")
 			}
-			reduce_db, err := sql.Open("sqlite3", fmt.Sprintf("/tmp/mapfolder/reduce_aggregate_%d.sql", work.WorkerID))
+			reduce_db, err := sql.Open("sqlite3", fmt.Sprintf("/tmp/tjones/reduce_aggregate_%d.sql", work.WorkerID))
 			for _, sql := range sqls {
 				_, err = reduce_db.Exec(sql)
 				if err != nil {
@@ -743,7 +743,7 @@ func StartWorker(mapFunc MapFunc, reduceFunc ReduceFunc, master string, verb boo
 			}
 			reduce_db.Close()
 
-			reduce_db, err = sql.Open("sqlite3", fmt.Sprintf("/tmp/mapfolder/reduce_aggregate_%d.sql", work.WorkerID))
+			reduce_db, err = sql.Open("sqlite3", fmt.Sprintf("/tmp/tjones/reduce_aggregate_%d.sql", work.WorkerID))
 			defer reduce_db.Close()
 			rows, err := reduce_db.Query("select key, value from data order by key asc;")
 			if err != nil {
@@ -803,7 +803,7 @@ func StartWorker(mapFunc MapFunc, reduceFunc ReduceFunc, master string, verb boo
 			close(inChan)
 			p := <-outChan
 			outputPairs = append(outputPairs, p)
-			db_out, err := sql.Open("sqlite3", fmt.Sprintf("/tmp/mapfolder/reduce_out_%d.sql", work.WorkerID))
+			db_out, err := sql.Open("sqlite3", fmt.Sprintf("/tmp/tjones/reduce_out_%d.sql", work.WorkerID))
 			defer db_out.Close()
 			if err != nil {
 				log.Println(err)
@@ -844,7 +844,7 @@ func StartWorker(mapFunc MapFunc, reduceFunc ReduceFunc, master string, verb boo
 					logf("Starting file server for reduceout files")
 				}
 
-				fileServer := http.FileServer(http.Dir("/tmp/mapfolder/"))
+				fileServer := http.FileServer(http.Dir("/tmp/tjones/"))
 				log.Println("Reduce Job File Server Listening on " + address)
 				log.Fatal(http.ListenAndServe(address, fileServer))
 			}(myAddress)
@@ -854,7 +854,7 @@ func StartWorker(mapFunc MapFunc, reduceFunc ReduceFunc, master string, verb boo
 			logf("Directed To Wait - Sleeping for 10 Seconds.")
 			time.Sleep(time.Second * 10)
 			logf("Cleanup Command Given - Removing Temp Files.")
-			os.RemoveAll("/tmp/mapfolder")
+			os.RemoveAll("/tmp/tjones")
 			break
 		} else {
 			log.Println("INVALID WORK TYPE")
@@ -894,7 +894,7 @@ func StartWorker(mapFunc MapFunc, reduceFunc ReduceFunc, master string, verb boo
 			}
 
 			logf("Cleanup Command Given - Removing Temp Files.")
-			err = os.RemoveAll("/tmp/mapfolder")
+			err = os.RemoveAll("/tmp/tjones")
 			if err != nil {
 				fmt.Printf("%q",err)
 			}
