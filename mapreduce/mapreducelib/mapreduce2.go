@@ -99,8 +99,8 @@ type Work struct {
 	//number of rows to work
 	Size int
 	//number of mappers
-	NumMappers  int
-	NumReducers int
+	M int
+	R int
 	//table name to work on
 	Table string
 	//evrybody in the quorum
