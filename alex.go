@@ -12,6 +12,38 @@ import (
 	"strconv"
 )
 
+type Task struct {
+}
+type Node struct {
+	NumMappers  int
+	NumReducers int
+	Tasks       []Task
+}
+
+func (n *Node) create() error {
+	rpc.Register(n)
+	rpc.HandleHTTP()
+	listening := false
+	nextAddress := 0
+	var l net.Listener
+	for !listening {
+		nextAddress += 1
+		listening = true
+		listener, err := net.Listen("tcp", n.address)
+		if err != nil {
+			if nextAddress >= 5 {
+				log.Fatal("Quorum is full")
+			}
+			listening = false
+			n.address = n.q[nextAddress]
+			log.Println("Address is:", n.address)
+		}
+		l = listener
+	}
+	go http.Serve(l, nil)
+	return nil
+}
+
 //This will be our struct to hold the data supplied by russ
 type Pair struct {
 	Key   string
