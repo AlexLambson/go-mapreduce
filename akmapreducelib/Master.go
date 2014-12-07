@@ -13,64 +13,62 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
-	"runtime"
 	"strconv"
 )
 
 var Global_Chat_Level int
 
-//these are used in task type
+/*
+	Task-type constants
+*/
 const (
-	WORK_DONE   = "1"
-	WORK_MAP    = "2"
-	WORK_REDUCE = "3"
-	WAIT        = "4"
-)
-const (
-	FULL_DEBUG   = 0 //shows everything in loops
-	VARS_DEBUG   = 1 //shows all variables
-	ERRO_DEBUG   = 2 //only shows errors
-	MESSAGES     = 3 //messages like "task assigned" "task complete" etc.
-	SPECIAL_CASE = 4 //rare cases that need to be shown no matter what
+	TASK_DONE   = "1"
+	TASK_MAP    = "2"
+	TASK_REDUCE = "3"
+	SLEEP       = "4"
 )
 
 type Config struct {
-	MasterIP       string
-	InputData      string
-	OutputFileName string
-	MapperNum      int
-	ReducerNum     int
-	TableName      string
+	MasterIP         string //IP of the master server
+	InputData        string //file location of the sqlite3 file to be worked
+	OutputFolderName string //foler location for final output and reduce output
+	MapTasksNumber   int    //max number of map tasks
+	ReduceTaksNumber int    //max number of reduce tasks
+	TableName        string //Table name to pull data from
+	LogLevel         int    //Controls the amount of log messages, see the consts
+	StartingIP       int
 }
 type Task struct {
-	//id of worker who is working on it
-	WorkerID int
-	//type of work, see consts
-	Type int
-	//file name of sqlite file
-	Filename string
-	//starting row
-	Offset int
-	//number of rows to work
-	Size int
-	//number of mappers
-	NumMappers  int
-	NumReducers int
-	//table name to work on
-	Table string
-	//evrybody in the quorum
-	MapAddresses []string
+	WorkerID        int      //id of worker who is working on it
+	Type            int      //type of work, see consts
+	Filename        string   //file name of sqlite file
+	Offset          int      //starting row
+	Size            int      //number of rows to work
+	NumMappers      int      //number of mappers
+	NumReducers     int      //number of reducers
+	Table           string   //table name to work on
+	WorkerAddresses []string //evrybody in the quorum
 }
-type Server struct {
-	NumMappers  int
-	NumReducers int
-	Tasks       []Task
-	Address     string
-	MaxServers  int
-	//base ip for building an ip in GetLocalAddress
-	//will default to :3410
-	StartingIP  int
-	IsListening bool
+type MasterServer struct {
+	NumMappers       int
+	NumReducers      int
+	Tasks            []Task   //Tasks to be performed
+	Address          string   //my ip. only set with MasterServer.SetLocalAddress() because code relies on a fully qualified ip
+	MaxServers       int      //max number of IPs to try before giving up. Used to prevent an infinite loop in MasterServer.create()
+	StartingIP       int      //base ip for building an ip in GetLocalAddress. will default to :3410
+	IsListening      bool     //has this server registered rpc?
+	NumTasksAssigned int      //number of map assignments that have been handed out
+	WorkerAddresses  []string //addresses of whole quorum
+	/*
+		MapDoneCount int
+		ReduceCount  int
+		WorkDone     int
+		DoneChan     chan int
+		Merged       bool
+		Table        string
+		Output       string
+		Verb         bool
+	*/
 }
 
 //This will be our struct to hold the data supplied by russ
@@ -83,62 +81,32 @@ type PingResponse struct {
 	Responded        bool
 }
 
-/*
-	Choose a desired level using the consts
-	Any level lower than the global will be printed
-*/
-func LogF(level int, message string, args ...interface{}) {
-	if level >= Global_Chat_Level || level == SPECIAL_CASE {
-		log.Println(fmt.Sprintf(message, args...))
-	}
-}
-
-/*
-	line number where error was called,
-	the name of function this was called in,
-	the message with printf flags,
-	the args for printf
-*/
-func PrintError(err error) {
-	if VARS_DEBUG >= Global_Chat_Level {
-		log.Println(err)
-	}
-}
-
-/*
-	Special error format:
-
-	skip = number of functions to skip in the stack.
-	eg. stack goes, Server.Create() -> SetLocalAddress() -> FormatError()
-	skip 0 will get SetLocalAddress()
-	skip 1 will get Server.Create()
-
-	message and args are standard printf format
-*/
-func FormatError(skip int, message string, args ...interface{}) error {
-	message = fmt.Sprintf(message, args...)
-	callerFunc, callerFile, callerLine, okay := runtime.Caller(skip)
-	if !okay {
-		LogF(SPECIAL_CASE, "Could not trace stack in an error report")
-		return nil
-	}
-	functionName := runtime.FuncForPC(callerFunc).Name()
-	return errors.New(fmt.Sprintf("\n    Error ---> %s \n    %s\n %s : %d ", functionName, message, callerFile, callerLine))
-}
-func NewServer(chatLevel int, configSettings) Server {
-	Global_Chat_Level = chatLevel
-	var tempServer Server
-	tempServer.NumMappers = 3
-	tempServer.NumReducers = 3
+func NewMasterRPC(LogLevel int, configSettings Config) MasterServer {
+	Global_Chat_Level = LogLevel
+	var self MasterServer
+	self.NumMappers = 3
+	self.NumReducers = 3
 	// max servers is workers plus worker
 	// this is only used when grabbing an IP
-	tempServer.MaxServers = tempServer.NumMappers + tempServer.NumReducers + 1
-	tempServer.StartingIP = 3410
-	tempServer.IsListening = false
-	tempServer.SetLocalAddress(tempServer.StartingIP)
-	tempServer.Tasks = make([]Task, 1000)
-	tempServer.create()
-	return tempServer
+	self.MaxServers = self.NumMappers + self.NumReducers + 1
+	self.StartingIP = 3410
+	self.IsListening = false
+	self.SetLocalAddress(self.StartingIP)
+	self.Tasks = make([]Task, 1000)
+	self.create()
+	return self
+}
+func Extend(array []interface{}, element interface{}, sizeMultiplier int) []interface{} {
+	length := len(array)
+	if length == cap(array) {
+		// Slice is full; must grow.
+		// We double its size and add 1, so if the size is zero we still grow.
+		newArray := make([]interface{}, length, sizeMultiplier*length+1)
+		copy(newArray, array)
+		array = newArray
+	}
+	array[length] = element
+	return array
 }
 
 /*
@@ -192,19 +160,19 @@ func (elt *Pair) InsertSQL(database *sql.DB) error {
 
 /*
 	Returns whatever
-	Server.Address is
+	MasterServer.Address is
 */
-func (elt *Server) GetLocalAddress() string {
+func (elt *MasterServer) GetLocalAddress() string {
 	return elt.Address
 }
 
 /*
 	Only makes changes to the listener if
-	this function is called BEFORE Server.create()
+	this function is called BEFORE MasterServer.create()
 */
-func (elt *Server) SetLocalAddress(newAddressInt int) error {
+func (elt *MasterServer) SetLocalAddress(newAddressInt int) error {
 	if elt.IsListening {
-		return FormatError(1, "Server already listening on: [%s]", elt.GetLocalAddress())
+		return FormatError(1, "MasterServer already listening on: [%s]", elt.GetLocalAddress())
 	}
 	tempAddress, err := PortIntToAddressString(newAddressInt)
 	if err != nil {
@@ -214,13 +182,13 @@ func (elt *Server) SetLocalAddress(newAddressInt int) error {
 		return nil
 	}
 }
-func (elt *Server) Ping(sender string, reply *PingResponse) error {
+func (elt *MasterServer) Ping(sender string, reply *PingResponse) error {
 	log.Println("Ping from : ", sender)
 	reply.Responded = true
 	reply.ResponderAddress = elt.GetLocalAddress()
 	return nil
 }
-func (elt *Server) create() error {
+func (elt *MasterServer) create() error {
 	rpc.Register(elt)
 	rpc.HandleHTTP()
 	listening := false
