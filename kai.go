@@ -1,5 +1,6 @@
 package main
 
+/*
 type Pair struct {
 	Key   string
 	Value string
@@ -51,7 +52,7 @@ type Work struct {
 	Table        string
 	MapAddresses []string
 }
- 
+
 //// Master
 
 func StartMaster(config *Config, reduceFunc ReduceFunc, verb bool) error {
@@ -220,4 +221,4 @@ func GetLocalAddress() string {
 	return localaddress
 }
 
-
+*/
