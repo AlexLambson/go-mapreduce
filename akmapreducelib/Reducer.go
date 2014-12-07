@@ -1,1 +1,1 @@
-package MapReduce
+package mapreduce

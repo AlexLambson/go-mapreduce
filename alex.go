@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	//"fmt"
 	//"github.com/mattn/go-sqlite3"
+	"bufio"
 	"log"
-	//"bufio"
 	//"time"
-	//"strings"
-	//"os"
+	"os"
 	"strconv"
+	"strings"
 )
 
 //This can be used to print data to the sql format from any struct
@@ -68,9 +68,26 @@ func DatabaseMutate(database *sql.DB, command SQLCommand) {
 func main() {
 	//cmdLineArgs := os.Args
 	//Server comes from mapreduce lib
-	var LocalServer MapReduce.Server
-	LocalServer = MapReduce.NewServer(0)
-	MapReduce.LogF(LocalServer.GetLocalAddress())
+	var LocalServer mapreduce.MasterServer
+	var Settings mapreduce.Config
+	var Tasks []mapreduce.Task
+	Settings.InputFileName = "austen.sqlite3"
+	Settings.OutputFolderName = "output"
+	Settings.NumMapTasks = 3
+	Settings.NumReduceTasks = 3
+	Settings.TableName = "pairs"
+	Settings.LogLevel = 0
+	Settings.StartingIP = 3410
+	LocalServer = mapreduce.NewMasterServer(Settings, &Tasks)
+	log.Println(LocalServer.GetServerAddress())
+	for {
+		reader := bufio.NewReader(os.Stdin)
+		line, err := reader.ReadString('\n')
+		line = strings.TrimSpace(line)
+		if err != nil {
+			log.Fatal("Can't read string!", err)
+		}
+	}
 	/*
 		NumMappers  int
 		NumReducers int
