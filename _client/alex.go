@@ -1,16 +1,14 @@
 package main
 
 import (
-	"./akmapreducelib"
 	"database/sql"
-	//"fmt"
+	//"github.com/alexlambson/mapreduce"
 	//"github.com/mattn/go-sqlite3"
-	"bufio"
+	//"bufio"
+	//"flag"
 	"log"
-	//"time"
-	"os"
 	"strconv"
-	"strings"
+	//"strings"
 )
 
 //This can be used to print data to the sql format from any struct
@@ -65,47 +63,3 @@ func DatabaseMutate(database *sql.DB, command SQLCommand) {
 	DatabaseMutate(database, alex)
 	fmt.Println(alex.QuerySQLFromStructKey(database))
 }*/
-func main() {
-	//cmdLineArgs := os.Args
-	//Server comes from mapreduce lib
-	var Settings mapreduce.Config
-	var Tasks []mapreduce.Task
-	var isMaster bool
-	Settings.InputFileName = "austen.sqlite3"
-	Settings.OutputFolderName = "output"
-	Settings.NumMapTasks = 3
-	Settings.NumReduceTasks = 3
-	Settings.TableName = "pairs"
-	Settings.LogLevel = 0
-	Settings.StartingIP = 3410
-	if openIP := mapreduce.FindOpenIP(Settings.StartingIP); openIP == "127.0.0.1:3410" {
-		mapreduce.LogF(3, "This machine is the master")
-		isMaster = true
-	} else {
-		mapreduce.LogF(3, "I am not the master: IP is [%s]", openIP)
-		isMaster = false
-	}
-	if isMaster {
-		var LocalServer mapreduce.MasterServer
-		LocalServer = mapreduce.NewMasterServer(Settings, &Tasks)
-		log.Println(LocalServer.GetServerAddress())
-	}
-	for {
-		reader := bufio.NewReader(os.Stdin)
-		line, err := reader.ReadString('\n')
-		line = strings.TrimSpace(line)
-		if err != nil {
-			log.Fatal("Can't read string!", err)
-		}
-	}
-	/*
-		NumMappers  int
-		NumReducers int
-		Tasks       []Task
-		Address     string
-		MaxServers  int
-		//base ip for building an ip in getLocalAddress
-		//will default to :3410
-		StartingIP int
-	*/
-}
