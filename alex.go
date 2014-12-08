@@ -68,9 +68,9 @@ func DatabaseMutate(database *sql.DB, command SQLCommand) {
 func main() {
 	//cmdLineArgs := os.Args
 	//Server comes from mapreduce lib
-	var LocalServer mapreduce.MasterServer
 	var Settings mapreduce.Config
 	var Tasks []mapreduce.Task
+	var isMaster bool
 	Settings.InputFileName = "austen.sqlite3"
 	Settings.OutputFolderName = "output"
 	Settings.NumMapTasks = 3
@@ -78,8 +78,18 @@ func main() {
 	Settings.TableName = "pairs"
 	Settings.LogLevel = 0
 	Settings.StartingIP = 3410
-	LocalServer = mapreduce.NewMasterServer(Settings, &Tasks)
-	log.Println(LocalServer.GetServerAddress())
+	if openIP := mapreduce.FindOpenIP(Settings.StartingIP); openIP == "127.0.0.1:3410" {
+		mapreduce.LogF(3, "This machine is the master")
+		isMaster = true
+	} else {
+		mapreduce.LogF(3, "I am not the master: IP is [%s]", openIP)
+		isMaster = false
+	}
+	if isMaster {
+		var LocalServer mapreduce.MasterServer
+		LocalServer = mapreduce.NewMasterServer(Settings, &Tasks)
+		log.Println(LocalServer.GetServerAddress())
+	}
 	for {
 		reader := bufio.NewReader(os.Stdin)
 		line, err := reader.ReadString('\n')

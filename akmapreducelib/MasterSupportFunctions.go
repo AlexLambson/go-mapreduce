@@ -184,6 +184,7 @@ func (elt *MasterServer) listen() error {
 			if nextAddress >= elt.MaxServers {
 				log.Fatal("Map Recuce is full")
 			}
+			LogF(ERRO_DEBUG, "%v", err)
 			//build next IP
 			if err := elt.SetServerAddress(elt.StartingIP + nextAddress); err != nil {
 				PrintError(err)
@@ -197,9 +198,10 @@ func (elt *MasterServer) listen() error {
 	go http.Serve(l, nil)
 	return nil
 }
-func findOpenIP(StartingIP int) (openAddress string, l net.Listener) {
+func FindOpenIP(StartingIP int) (openAddress string) {
 	//Only used for it's functions
 	var elt MasterServer
+	var l net.Listener
 	elt.SetServerAddress(StartingIP)
 	foundPort := false
 	nextPort := 0
@@ -217,6 +219,7 @@ func findOpenIP(StartingIP int) (openAddress string, l net.Listener) {
 			foundPort = true
 		}
 	}
+	l.Close()
 	openAddress = elt.GetServerAddress()
-	return openAddress, l
+	return openAddress
 }
