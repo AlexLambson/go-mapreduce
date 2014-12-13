@@ -27,6 +27,7 @@ const (
 	TASK_MAP    = 2
 	TASK_REDUCE = 3
 	SLEEP       = 4
+	DOWNLOAD    = 5
 )
 
 type Request struct {
@@ -46,6 +47,7 @@ type Response struct {
 	Reducer      int
 	Task         Task
 	Output       string
+	StartingIP   int
 }
 type Config struct {
 	MasterIP         string //IP of the master server
@@ -144,6 +146,7 @@ func (elt *MasterServer) GetWork(_ Request, response *Response) error {
 
 		task.NumReducers = elt.NumReduceTasks
 		response.Task = task
+		response.StartingIP = elt.StartingIP
 		elt.NumTasksAssigned++
 		elt.Tasks = elt.Tasks[1:]
 	} else if elt.ReduceCount < elt.NumReduceTasks { // REDUCE
@@ -157,6 +160,7 @@ func (elt *MasterServer) GetWork(_ Request, response *Response) error {
 			task.MapFileLocations = elt.MapFileLocations
 			elt.ReduceCount++
 			response.Task = task
+			response.StartingIP = elt.StartingIP
 			return nil
 		} else {
 			response.Type = SLEEP
