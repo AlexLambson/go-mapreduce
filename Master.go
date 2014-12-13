@@ -3,7 +3,7 @@ package mapreduce
 import (
 	"database/sql"
 	"fmt"
-	//"github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"math"
 	//"bufio"

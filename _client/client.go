@@ -5,15 +5,39 @@ import (
 	"github.com/alexlambson/mapreduce"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
+func wordCountReducer(key string, values <-chan string, output chan<- mapreduce.Pair) error {
+	defer close(output)
+	count := 0
+	for v, ok := <-values; ok; v, ok = <-values {
+		i, err := strconv.Atoi(v)
+		if err != nil {
+			return err
+		}
+		count += i
+	}
+	p := mapreduce.Pair{Key: key, Value: strconv.Itoa(count)}
+	output <- p
+
+	return nil
+}
 func main() {
 	isMaster := false
 	Settings := mapreduce.ParseFlagsToSettings()
+	masterIPString, _ := mapreduce.PortIntToAddressString(Settings.StartingIP)
+	if mapreduce.FindOpenIP(Settings.StartingIP) == masterIPString {
+		isMaster = true
+	}
 
 	if isMaster {
-		//var LocalServer mapreduce.MasterServer
+		mapreduce.LogF(mapreduce.MESSAGES, "I am the master on %d", Settings.StartingIP)
+		err := mapreduce.StartMaster(&Settings, wordCountReducer)
+		if err != nil {
+			mapreduce.PrintError(err)
+		}
 		//LocalServer = mapreduce.NewMasterServer(Settings, &Tasks)
 		//log.Println(LocalServer.GetServerAddress())
 	}
