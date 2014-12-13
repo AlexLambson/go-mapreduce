@@ -5,6 +5,7 @@ import (
 	"fmt"
 	//"github.com/mattn/go-sqlite3"
 	"log"
+	"math"
 	//"bufio"
 	//"time"
 	//"errors"
@@ -22,12 +23,30 @@ var Global_Chat_Level int
 	Task-type constants
 */
 const (
-	TASK_DONE   = "1"
-	TASK_MAP    = "2"
-	TASK_REDUCE = "3"
-	SLEEP       = "4"
+	TASK_DONE   = 1
+	TASK_MAP    = 2
+	TASK_REDUCE = 3
+	SLEEP       = 4
 )
 
+type Request struct {
+	Message string
+	Address string //myaddress
+	Type    int    //get from consts
+	Task    Task
+}
+
+type Response struct {
+	Message      string
+	DatabaseName string
+	StartingRow  int //offset
+	RowsToWork   int //chunksize
+	Type         int //pick from
+	Mapper       int
+	Reducer      int
+	Task         Task
+	Output       string
+}
 type Config struct {
 	MasterIP         string //IP of the master server
 	InputFileName    string //relative file name of the sqlite3 file to be worked
@@ -59,6 +78,12 @@ type MasterServer struct {
 	IsListening      bool     //has this server registered rpc and listening on http?
 	NumTasksAssigned int      //number of map assignments that have been handed out
 	MapFileLocations []string //locations of the files created by a mapper
+	Output           string   //output
+	Table            string   //table name
+	ReduceCount      int      //number of reduce tasks to do
+	MapDoneCount     int      //map tasks done
+	DoneChannel      chan int
+	LogLevel         int
 	/*
 		MapDoneCount int
 		ReduceCount  int
@@ -106,5 +131,98 @@ func (elt *MasterServer) Ping(sender string, reply *PingResponse) error {
 	log.Println("Ping from : ", sender)
 	reply.Responded = true
 	reply.ResponderAddress = elt.GetServerAddress()
+	return nil
+}
+func (elt *MasterServer) GetWork(_ Request, response *Response) error {
+	response.Output = elt.Output
+	if len(elt.Tasks) > 0 { // MAP
+		log.Printf("Map task %d Assigned", elt.NumTasksAssigned+1)
+		response.Type = TASK_MAP
+		task := elt.Tasks[0]
+		task.Table = elt.Table
+		task.NumMapTasks = elt.NumMapTasks
+
+		task.NumReducers = elt.NumReduceTasks
+		response.Task = task
+		elt.NumTasksAssigned++
+		elt.Tasks = elt.Tasks[1:]
+	} else if elt.ReduceCount < elt.NumReduceTasks { // REDUCE
+		if elt.MapDoneCount >= elt.NumMapTasks {
+			log.Printf("Reduce task %d Assigned", elt.ReduceCount+1)
+			response.Type = TASK_REDUCE
+			var task Task
+			task.NumMapTasks = elt.NumMapTasks
+			task.NumReducers = elt.NumReduceTasks
+			task.WorkerID = elt.ReduceCount
+			task.MapFileLocations = elt.MapFileLocations
+			elt.ReduceCount++
+			response.Task = task
+			return nil
+		} else {
+			response.Type = SLEEP
+			return nil
+		}
+	} else { //Done
+		LogF(MESSAGES, "All Jobs Have Been Assigned.")
+		response.Type = TASK_DONE
+	}
+
+	return nil
+}
+func StartMaster(config *Config, reduceFunction ReduceFunction) error {
+	// Config variables
+	//input
+	dbName := config.InputFileName
+	tableName := config.TableName
+	outputName := config.OutputFolderName
+	maptasks := config.NumMapTasks
+	reduceTasks := config.NumReduceTasks
+
+	LogF(VARS_DEBUG, "Opening %s:%s", dbName, tableName)
+
+	// Load the input data
+	db, err := sql.Open("sqlite3", dbName)
+	if err != nil {
+		LogF(ERRO_DEBUG, "Error in opening DB \n%v", err)
+		return err
+	}
+	defer db.Close()
+
+	// Count the work to be done
+	query, err := db.Query(fmt.Sprintf("select count(*) from %s;", tableName))
+	if err != nil {
+		LogF(ERRO_DEBUG, "Failed in query sql count\n%v", err)
+		return err
+	}
+	defer query.Close()
+
+	// Split up the data per m
+	var count int
+	var rowsToWork int
+	query.Next()
+	query.Scan(&count)
+	rowsToWork = int(math.Ceil(float64(count) / float64(maptasks)))
+	var tasks []Task
+	for i := 0; i < maptasks; i++ {
+		var task Task
+		task.Type = TASK_MAP
+		task.Filename = dbName
+		task.Offset = i * rowsToWork
+		task.Size = rowsToWork
+		task.WorkerID = i
+		tasks = append(tasks, task)
+	}
+	LogF(VARS_DEBUG, "%d Tasks to work", count)
+	// Set up the RPC server to listen for workers
+
+	elt := NewMasterServer(*config, &tasks)
+
+	<-elt.DoneChannel
+
+	err = Merge(reduceTasks, reduceFunction, outputName)
+	if err != nil {
+		LogF(ERRO_DEBUG, "Error from merging\n%v", err)
+	}
+
 	return nil
 }
