@@ -8,20 +8,26 @@
 package mapreduce
 
 import (
-	//"database/sql"
+	"database/sql"
 	"fmt"
 	//"github.com/mattn/go-sqlite3"
 	"log"
 	//"time"
 	"errors"
-	"strings"
-	//"os"
 	"net"
 	"net/http"
 	"net/rpc"
+	"os"
 	"runtime"
 	"strconv"
+	"strings"
 )
+
+/*
+	Type declarations for functions
+*/
+type MapFunction func(key, value string, output chan<- Pair) error
+type ReduceFunction func(key string, values <-chan string, output chan<- Pair) error
 
 /*
 	Log Level constants:
@@ -95,7 +101,13 @@ func NewMasterServer(Settings Config, Tasks *[]Task) MasterServer {
 	self.IsListening = false
 	self.SetServerAddress(self.StartingIP)
 	self.Tasks = *Tasks
+	self.ReduceCount = 0
+	self.DoneChannel = make(chan int)
+	self.Table = Settings.TableName
+	self.Output = Settings.OutputFolderName
+	self.LogLevel = Settings.LogLevel
 	self.listen()
+
 	return self
 }
 
@@ -162,6 +174,7 @@ func (elt *MasterServer) SetServerAddress(newAddressInt int) error {
 		return FormatError(1, "Not a valid port number [%d] \n    Error: [%v]", newAddressInt, err)
 	} else {
 		elt.Address = tempAddress
+
 		return nil
 	}
 }
@@ -222,4 +235,132 @@ func FindOpenIP(StartingIP int) (openAddress string) {
 	l.Close()
 	openAddress = elt.GetServerAddress()
 	return openAddress
+}
+func Merge(ReduceTasks int, reduceFunction ReduceFunction, output string) error {
+	os.Mkdir("/tmp/AK47", 1777)
+	// Combine all the rows into a single input file
+	sqlCommands := []string{
+		"create table if not exists data (key text not null, value text not null)",
+		"create index if not exists data_key on data (key asc, value asc);",
+		"pragma synchronous = off;",
+		"pragma journal_mode = off;",
+	}
+	for i := 0; i < ReduceTasks; i++ {
+
+		LogF(VARS_DEBUG, "Aggregating Reducer Output Files")
+
+		db, err := sql.Open("sqlite3", fmt.Sprintf("%s/reduce_out_%d.sql", output, i))
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		defer db.Close()
+
+		rows, err := db.Query("select key, value from data;")
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var key string
+			var value string
+			rows.Scan(&key, &value)
+			sqlCommands = append(sqlCommands, fmt.Sprintf("insert into data values ('%s', '%s');", key, value))
+		}
+	}
+
+	enddb, err := sql.Open("sqlite3", "/tmp/AK47/end.sql")
+	for _, sql := range sqlCommands {
+		_, err = enddb.Exec(sql)
+		if err != nil {
+			LogF(ERRO_DEBUG, "%q: %s\n", err, sql)
+		}
+	}
+	enddb.Close()
+
+	enddb, err = sql.Open("sqlite3", ("/tmp/AK47/end.sql"))
+	defer enddb.Close()
+	rows, err := enddb.Query("select key, value from data order by key asc;")
+	if err != nil {
+		LogF(ERRO_DEBUG, "sql.Query3\n%v", err)
+		return err
+	}
+	defer rows.Close()
+
+	var key string
+	var value string
+	rows.Next()
+	rows.Scan(&key, &value)
+
+	inChan := make(chan string)
+	outChan := make(chan Pair)
+	go func() {
+		err = reduceFunction(key, inChan, outChan)
+		if err != nil {
+			PrintError(err)
+		}
+	}()
+	inChan <- value
+	current := key
+
+	var outputPairs []Pair
+	// Walk through the file's rows, performing the reduce func
+	for rows.Next() {
+		rows.Scan(&key, &value)
+		if key == current {
+			inChan <- value
+		} else {
+			close(inChan)
+			p := <-outChan
+			outputPairs = append(outputPairs, p)
+
+			inChan = make(chan string)
+			outChan = make(chan Pair)
+			go func() {
+				err = reduceFunction(key, inChan, outChan)
+				if err != nil {
+					PrintError(err)
+				}
+			}()
+			inChan <- value
+			current = key
+		}
+	}
+	close(inChan)
+	p := <-outChan
+	outputPairs = append(outputPairs, p)
+
+	// Prepare tmp database
+	dbfin, err := sql.Open("sqlite3", fmt.Sprintf("%s/output.sql", output))
+	defer dbfin.Close()
+	if err != nil {
+		PrintError(FormatError(0, "Failed in opening final output:\n%v", err))
+		return err
+	}
+	sqlCommands = []string{
+		"create table if not exists data (key text not null, value text not null)",
+		"create index if not exists data_key on data (key asc, value asc);",
+		"pragma synchronous = off;",
+		"pragma journal_mode = off;",
+	}
+	for _, sql := range sqlCommands {
+		_, err = dbfin.Exec(sql)
+		if err != nil {
+			LogF(ERRO_DEBUG, "%q: %s\n", err, sql)
+			return err
+		}
+	}
+
+	// Write the data locally
+	for _, outputPair := range outputPairs {
+		sql := fmt.Sprintf("insert into data values ('%s', '%s');", outputPair.Key, outputPair.Value)
+		_, err = dbfin.Exec(sql)
+		if err != nil {
+			LogF(ERRO_DEBUG, "%q: %s\n", err, sql)
+			return err
+		}
+	}
+	return nil
 }
