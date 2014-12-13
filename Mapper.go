@@ -36,7 +36,8 @@ func call(address, method string, request Request, response *Response) error {
 	return nil
 }
 func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) error {
-	os.Mkdir("/tmp/AK47", 1777)
+	errfile := os.Mkdir("\\tmp\\AK47", 1777)
+	log.Println(errfile)
 	tasks_run := 0
 	call_fail := 0
 	for {
@@ -90,6 +91,7 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 			LogF(MESSAGES, "MTask Number: %d", task.WorkerID+1)
 			LogF(MESSAGES, "   SQL Range: %d-%d", task.Offset, task.Offset+task.Size)
 			// Load data
+
 			db, err := sql.Open("sqlite3", task.Filename)
 			if err != nil {
 				LogF(ERRO_DEBUG, "sql.Open \n%v", err)
