@@ -237,7 +237,15 @@ func FindOpenIP(StartingIP int) (openAddress string) {
 	return openAddress
 }
 func Merge(ReduceTasks int, reduceFunction ReduceFunction, output string) error {
-	os.Mkdir("/tmp/AK47", 1777)
+	pathName := "final/"
+	temp := "tmp/AK47/"
+	outputPath := fmt.Sprintf("%s/", output)
+	if runtime.GOOS == "windows" {
+		pathName = "final\\"
+		outputPath = fmt.Sprintf("%s\\", output)
+		temp = "tmp\\AK47\\"
+	}
+	os.Mkdir(pathName, 0777)
 	// Combine all the rows into a single input file
 	sqlCommands := []string{
 		"create table if not exists data (key text not null, value text not null)",
@@ -249,7 +257,7 @@ func Merge(ReduceTasks int, reduceFunction ReduceFunction, output string) error 
 
 		LogF(VARS_DEBUG, "Aggregating Reducer Output Files")
 
-		db, err := sql.Open("sqlite3", fmt.Sprintf("%s/reduce_out_%d.sql", output, i))
+		db, err := sql.Open("sqlite3", fmt.Sprintf("%sreduce_out_%d.sql", outputPath, i))
 		if err != nil {
 			log.Println(err)
 			continue
@@ -271,7 +279,7 @@ func Merge(ReduceTasks int, reduceFunction ReduceFunction, output string) error 
 		}
 	}
 
-	enddb, err := sql.Open("sqlite3", "/tmp/AK47/end.sql")
+	enddb, err := sql.Open("sqlite3", pathName+"end.sql")
 	for _, sql := range sqlCommands {
 		_, err = enddb.Exec(sql)
 		if err != nil {
@@ -280,7 +288,7 @@ func Merge(ReduceTasks int, reduceFunction ReduceFunction, output string) error 
 	}
 	enddb.Close()
 
-	enddb, err = sql.Open("sqlite3", ("/tmp/AK47/end.sql"))
+	enddb, err = sql.Open("sqlite3", (outputPath + "end.sql"))
 	defer enddb.Close()
 	rows, err := enddb.Query("select key, value from data order by key asc;")
 	if err != nil {
@@ -333,7 +341,7 @@ func Merge(ReduceTasks int, reduceFunction ReduceFunction, output string) error 
 	outputPairs = append(outputPairs, p)
 
 	// Prepare tmp database
-	dbfin, err := sql.Open("sqlite3", fmt.Sprintf("%s/output.sql", output))
+	dbfin, err := sql.Open("sqlite3", fmt.Sprintf("%soutput.sql", pathName))
 	defer dbfin.Close()
 	if err != nil {
 		PrintError(FormatError(0, "Failed in opening final output:\n%v", err))
@@ -362,5 +370,7 @@ func Merge(ReduceTasks int, reduceFunction ReduceFunction, output string) error 
 			return err
 		}
 	}
+	os.Remove(outputPath)
+	os.Remove(temp)
 	return nil
 }

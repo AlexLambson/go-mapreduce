@@ -6,13 +6,15 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"math"
+	"runtime"
 	//"bufio"
-	//"time"
+	"io/ioutil"
+	"time"
 	//"errors"
 	//"strings"
-	//"os"
+	"os"
 	//"net"
-	//"net/http"
+	"net/http"
 	//"net/rpc"
 	//"strconv"
 )
@@ -84,8 +86,10 @@ type MasterServer struct {
 	Table            string   //table name
 	ReduceCount      int      //number of reduce tasks to do
 	MapDoneCount     int      //map tasks done
+	Finished         int
 	DoneChannel      chan int
 	LogLevel         int
+	FilesDownloaded  int
 	/*
 		MapDoneCount int
 		ReduceCount  int
@@ -226,6 +230,59 @@ func StartMaster(config *Config, reduceFunction ReduceFunction) error {
 	err = Merge(reduceTasks, reduceFunction, outputName)
 	if err != nil {
 		LogF(ERRO_DEBUG, "Error from merging\n%v", err)
+	}
+
+	return nil
+}
+func (elt *MasterServer) Notify(request Request, response *Response) error {
+	if request.Type == TASK_MAP {
+		LogF(MESSAGES, "%d of %d Map Tasks Complete", elt.MapDoneCount+1, elt.NumMapTasks)
+		elt.MapFileLocations = append(elt.MapFileLocations, request.Address)
+		elt.MapDoneCount++
+	} else if request.Type == TASK_REDUCE {
+		LogF(MESSAGES, "%d of %d Reduce Tasks Complete", elt.Finished+1, elt.NumReduceTasks)
+		elt.Finished++
+		LogF(VARS_DEBUG, "Getting reducer#%d output file for master", request.Task.WorkerID)
+		time.Sleep(time.Second * 2)
+		red_file := fmt.Sprintf("http://%s/reduce_out_%d.sql", request.Address, request.Task.WorkerID)
+
+		res, err := http.Get(red_file)
+		if err != nil {
+			LogF(SPECIAL_CASE, "Failed getting file from reducer")
+			log.Fatal(err)
+		}
+
+		file, err := ioutil.ReadAll(res.Body)
+		res.Body.Close()
+		if err != nil {
+			LogF(SPECIAL_CASE, "Failed to read all using ioutil")
+			log.Fatal(err)
+		}
+		pathName := fmt.Sprintf("%s/", elt.Output)
+		if runtime.GOOS == "windows" {
+			pathName = fmt.Sprintf("%s\\", elt.Output)
+		}
+		os.MkdirAll(pathName, 0777)
+		filename := fmt.Sprintf("%sreduce_out_%d.sql", pathName, request.Task.WorkerID)
+		err = ioutil.WriteFile(filename, file, 0777)
+		if err != nil {
+			LogF(SPECIAL_CASE, "Couldn't write file \n%s", filename)
+			log.Fatal(err)
+		}
+		if elt.Finished >= elt.NumReduceTasks {
+			response.Type = SLEEP
+
+		}
+	} else if request.Type == DOWNLOAD {
+		elt.FilesDownloaded++
+	} else if request.Type == SLEEP {
+		if elt.FilesDownloaded == (elt.NumMapTasks * elt.NumReduceTasks) {
+			response.Type = TASK_DONE
+			go func() {
+				time.Sleep(time.Second * 11)
+				elt.DoneChannel <- 1
+			}()
+		}
 	}
 
 	return nil
