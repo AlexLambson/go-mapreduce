@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
+	"runtime"
 	"time"
 )
 
@@ -36,8 +37,13 @@ func call(address, method string, request Request, response *Response) error {
 	return nil
 }
 func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) error {
-	errfile := os.Mkdir("\\tmp\\AK47", 1777)
-	log.Println(errfile)
+	pathName := "tmp/AK47/"
+	//httpfilename := filename
+	if runtime.GOOS == "windows" {
+		log.Println("Running on windows, filenames adjusted")
+		pathName = "tmp\\AK47\\"
+	}
+	os.MkdirAll(pathName, 0777)
 	tasks_run := 0
 	call_fail := 0
 	for {
@@ -51,6 +57,7 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 		LogF(MESSAGES, "Calling master for task")
 		LogF(MESSAGES, "Master is: %s", master)
 		err := call(master, "GetWork", req, &resp)
+		Global_Chat_Level = 0
 		if err != nil {
 			LogF(ERRO_DEBUG, "GetWork")
 			call_fail++
@@ -121,7 +128,7 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 				reducer := big.NewInt(0)
 				reducer.Mod(hash(key), big.NewInt(int64(task.NumReducers)))
 
-				db_tmp, err := sql.Open("sqlite3", fmt.Sprintf("/tmp/AK47/map_%d_out_%d.sql", task.WorkerID, reducer.Int64()))
+				db_tmp, err := sql.Open("sqlite3", fmt.Sprintf("%smap_%d_out_%d.sql", pathName, task.WorkerID, reducer.Int64()))
 				if err != nil {
 					LogF(ERRO_DEBUG, "sql.Open - /tmp/map_output/%d/map_out_%d.sql", task.WorkerID, reducer.Int64())
 					return err
@@ -175,7 +182,7 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 			go func(address string) {
 				LogF(FULL_DEBUG, "Starting file server for mapout files")
 
-				fileServer := http.FileServer(http.Dir("/tmp/AK47/"))
+				fileServer := http.FileServer(http.Dir(pathName))
 				LogF(FULL_DEBUG, "Map Job File Server Listening on "+address)
 				log.Fatal(http.ListenAndServe(address, fileServer))
 			}(my_address)
@@ -212,7 +219,7 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 					log.Fatal(err)
 				}
 
-				filename := fmt.Sprintf("/tmp/AK47/map_out_%d_mapper_%d.sql", task.WorkerID, i)
+				filename := fmt.Sprintf("%smap_out_%d_mapper_%d.sql", pathName, task.WorkerID, i)
 				filenames = append(filenames, filename)
 
 				err = ioutil.WriteFile(filename, file, 0777)
@@ -258,7 +265,7 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 
 			LogF(FULL_DEBUG, "Aggregating Complete :: Preping Reduce DB")
 
-			reduce_db, err := sql.Open("sqlite3", fmt.Sprintf("/tmp/AK47/reduce_aggregate_%d.sql", task.WorkerID))
+			reduce_db, err := sql.Open("sqlite3", fmt.Sprintf("%sreduce_agg_%d.sql", pathName, task.WorkerID))
 			for _, sql := range sqls {
 				_, err = reduce_db.Exec(sql)
 				if err != nil {
@@ -267,7 +274,7 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 			}
 			reduce_db.Close()
 
-			reduce_db, err = sql.Open("sqlite3", fmt.Sprintf("/tmp/AK47/reduce_agg_%d.sql", task.WorkerID))
+			reduce_db, err = sql.Open("sqlite3", fmt.Sprintf("%sreduce_agg_%d.sql", pathName, task.WorkerID))
 			defer reduce_db.Close()
 			rows, err := reduce_db.Query("select key, value from data order by key asc;")
 			if err != nil {
@@ -325,7 +332,7 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 			close(inChan)
 			p := <-outChan
 			outputPairs = append(outputPairs, p)
-			db_out, err := sql.Open("sqlite3", fmt.Sprintf("/tmp/AK47/reduce_out_%d.sql", task.WorkerID))
+			db_out, err := sql.Open("sqlite3", fmt.Sprintf("%sreduce_out_%d.sql", pathName, task.WorkerID))
 			defer db_out.Close()
 			if err != nil {
 				PrintError(err)
@@ -365,7 +372,7 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 
 				LogF(FULL_DEBUG, "Starting file server for reduceout files")
 
-				fileServer := http.FileServer(http.Dir("/tmp/AK47/"))
+				fileServer := http.FileServer(http.Dir(pathName))
 				LogF(FULL_DEBUG, "Reduce Job File Server Listening on "+address)
 				log.Fatal(http.ListenAndServe(address, fileServer))
 			}(my_address)
@@ -375,7 +382,7 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 			LogF(MESSAGES, "Wait Message    :: 10 seconds")
 			time.Sleep(time.Second * 10)
 			LogF(MESSAGES, "Cleanup Message :: Removing Temp Files")
-			os.RemoveAll("/tmp/AK47")
+			os.RemoveAll(pathName)
 			break
 		} else {
 			LogF(ERRO_DEBUG, "INVALID WORK TYPE")
@@ -396,12 +403,12 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 			continue
 		}
 
-		if resp.Type == SLEEP {
+		if resp.Type == STANDBY {
 			for {
 				LogF(MESSAGES, "Wait Message    :: 10 seconds")
 				time.Sleep(time.Second * 10)
 
-				req.Type = SLEEP
+				req.Type = STANDBY
 				err = call(master, "Notify", req, &resp)
 				if err != nil {
 					LogF(ERRO_DEBUG, "Notify Waiting")
@@ -414,7 +421,7 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 			}
 
 			LogF(MESSAGES, "Cleanup Message :: Removing Temp Files")
-			err = os.RemoveAll("/tmp/AK47")
+			err = os.RemoveAll(pathName)
 			if err != nil {
 				fmt.Printf("%q", err)
 			}
