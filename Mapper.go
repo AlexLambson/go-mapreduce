@@ -403,12 +403,12 @@ func StartWorker(mapFunc MapFunction, reduceFunc ReduceFunction, master string) 
 			continue
 		}
 
-		if resp.Type == SLEEP {
+		if resp.Type == STANDBY {
 			for {
 				LogF(MESSAGES, "Wait Message    :: 10 seconds")
 				time.Sleep(time.Second * 10)
 
-				req.Type = SLEEP
+				req.Type = STANDBY
 				err = call(master, "Notify", req, &resp)
 				if err != nil {
 					LogF(ERRO_DEBUG, "Notify Waiting")

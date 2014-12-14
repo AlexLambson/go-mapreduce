@@ -237,15 +237,15 @@ func FindOpenIP(StartingIP int) (openAddress string) {
 	return openAddress
 }
 func Merge(ReduceTasks int, reduceFunction ReduceFunction, output string) error {
-	pathName := "final/"
-	temp := "tmp/AK47/"
+	finalPathname := "final/"
+	//temp := "tmp/AK47/"
 	outputPath := fmt.Sprintf("%s/", output)
 	if runtime.GOOS == "windows" {
-		pathName = "final\\"
+		finalPathname = "final\\"
 		outputPath = fmt.Sprintf("%s\\", output)
-		temp = "tmp\\AK47\\"
+		//temp = "tmp\\AK47\\"
 	}
-	os.Mkdir(pathName, 0777)
+	os.Mkdir(finalPathname, 0777)
 	// Combine all the rows into a single input file
 	sqlCommands := []string{
 		"create table if not exists data (key text not null, value text not null)",
@@ -279,7 +279,7 @@ func Merge(ReduceTasks int, reduceFunction ReduceFunction, output string) error 
 		}
 	}
 
-	enddb, err := sql.Open("sqlite3", pathName+"end.sql")
+	enddb, err := sql.Open("sqlite3", outputPath+"end.sql")
 	for _, sql := range sqlCommands {
 		_, err = enddb.Exec(sql)
 		if err != nil {
@@ -341,7 +341,7 @@ func Merge(ReduceTasks int, reduceFunction ReduceFunction, output string) error 
 	outputPairs = append(outputPairs, p)
 
 	// Prepare tmp database
-	dbfin, err := sql.Open("sqlite3", fmt.Sprintf("%soutput.sql", pathName))
+	dbfin, err := sql.Open("sqlite3", fmt.Sprintf("%soutput.sql", finalPathname))
 	defer dbfin.Close()
 	if err != nil {
 		PrintError(FormatError(0, "Failed in opening final output:\n%v", err))
@@ -370,7 +370,7 @@ func Merge(ReduceTasks int, reduceFunction ReduceFunction, output string) error 
 			return err
 		}
 	}
-	os.Remove(outputPath)
-	os.Remove(temp)
+	//os.Remove(outputPath)
+	//os.Remove(temp)
 	return nil
 }

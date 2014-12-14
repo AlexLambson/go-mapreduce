@@ -30,6 +30,7 @@ const (
 	TASK_REDUCE = 3
 	SLEEP       = 4
 	DOWNLOAD    = 5
+	STANDBY     = 6
 )
 
 type Request struct {
@@ -231,7 +232,16 @@ func StartMaster(config *Config, reduceFunction ReduceFunction) error {
 	if err != nil {
 		LogF(ERRO_DEBUG, "Error from merging\n%v", err)
 	}
-
+	/*
+		temp := "tmp/"
+		output := fmt.Sprintf("%s/", outputName)
+		if runtime.GOOS == "windows" {
+			temp = "tmp\\"
+			output = fmt.Sprintf("%s\\", outputName)
+		}
+		//log.Println(os.RemoveAll(temp))
+		//log.Println(os.RemoveAll(output))
+	*/
 	return nil
 }
 func (elt *MasterServer) Notify(request Request, response *Response) error {
@@ -270,13 +280,10 @@ func (elt *MasterServer) Notify(request Request, response *Response) error {
 			log.Fatal(err)
 		}
 		if elt.Finished >= elt.NumReduceTasks {
-			response.Type = SLEEP
-
+			response.Type = STANDBY
 		}
-	} else if request.Type == DOWNLOAD {
-		elt.FilesDownloaded++
-	} else if request.Type == SLEEP {
-		if elt.FilesDownloaded == (elt.NumMapTasks * elt.NumReduceTasks) {
+	} else if request.Type == STANDBY {
+		if elt.Finished >= elt.NumReduceTasks {
 			response.Type = TASK_DONE
 			go func() {
 				time.Sleep(time.Second * 11)
