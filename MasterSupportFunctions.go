@@ -144,8 +144,15 @@ func PortIntToAddressString(intPort int) (string, error) {
 	If string is just a port, then it will append localhost
 */
 func CheckAddressValidity(s string) string {
+	host, _ := os.Hostname()
+	IP, _ := net.LookupIP(host)
+	/*for index, value := range IP {
+		fmt.Println(index, "    ", value.String())
+	}
+	fmt.Println("TRYING", IP[2].String())
+	*/
 	if strings.HasPrefix(s, ":") {
-		return "127.0.0.1" + s
+		return IP[2].String() + s
 	} else if strings.Contains(s, ":") {
 		return s
 	} else {

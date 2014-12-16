@@ -41,14 +41,10 @@ func wordCountReducer(key string, values <-chan string, output chan<- mapreduce.
 	return nil
 }
 func main() {
-	isMaster := false
 	Settings := mapreduce.ParseFlagsToSettings()
 	masterIPString, _ := mapreduce.PortIntToAddressString(Settings.StartingIP)
-	if mapreduce.FindOpenIP(Settings.StartingIP) == masterIPString {
-		isMaster = true
-	}
 
-	if isMaster {
+	if Settings.IsMaster {
 		mapreduce.LogF(mapreduce.MESSAGES, "I am the master on %d", Settings.StartingIP)
 		err := mapreduce.StartMaster(&Settings, wordCountReducer)
 		if err != nil {

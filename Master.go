@@ -61,6 +61,7 @@ type Config struct {
 	TableName        string //Table name to pull data from
 	LogLevel         int    //Controls the amount of log messages, see the consts
 	StartingIP       int    //The port to start on when looking for an IP
+	IsMaster         bool   //Is the master an external machine
 }
 type Task struct {
 	WorkerID         int      //id of worker who completed the map task
