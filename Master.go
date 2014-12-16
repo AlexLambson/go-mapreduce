@@ -6,7 +6,11 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"math"
+<<<<<<< .merge_file_bTesO3
+	// moved to other files
+=======
 	"runtime"
+>>>>>>> .merge_file_0GAvyF
 	//"bufio"
 	"io/ioutil"
 	"time"
@@ -100,7 +104,6 @@ type MasterServer struct {
 		Merged       bool
 		Table        string
 		Output       string
-		Verb         bool
 	*/
 }
 
